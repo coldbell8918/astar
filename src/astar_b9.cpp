@@ -7,6 +7,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/int32_multi_array.hpp>
 #include <nav_msgs/msg/occupancy_grid.hpp>
+#include <std_msgs/msg/int32.hpp> 
 
 const int dx[] = {-1, 1, 0, 0, -1, 1, -1, 1};
 const int dy[] = {0, 0, -1, 1, -1, -1, 1, 1}; // 좌, 우, 위, 아래, 대각선2
@@ -44,24 +45,49 @@ std::vector<std::pair<int, int>> AStar(int startX, int startY, int goalX, int go
     Node* startNode = new Node(startX, startY, 0, heuristic(startX, startY, goalX, goalY));
     openList.push(*startNode);
 
+    Eigen::MatrixXi nodeParentData(0, 4);
+    // int i=0;
+
+
     while (!openList.empty()) {
         Node current = openList.top();
         openList.pop();
+        
+
+        // 행렬에 새로운 데이터 삽입 (node와 parent 정보)
+        if (current.parent != nullptr) {
+            // i++;
+            nodeParentData.conservativeResize(nodeParentData.rows() + 1, Eigen::NoChange);
+            nodeParentData(nodeParentData.rows() - 1, 0) = current.x;      // node.x
+            nodeParentData(nodeParentData.rows() - 1, 1) = current.y;      // node.y
+            nodeParentData(nodeParentData.rows() - 1, 2) = current.parent->x;  // parent.x
+            nodeParentData(nodeParentData.rows() - 1, 3) = current.parent->y;  // parent.y
+            // std::cout << nodeParentData(i,1) <<"\n";
+        }
+
 
         if (current.x == goalX && current.y == goalY) {
             std::vector<std::pair<int, int>> path;
             path.push_back({goalX, goalY});
-            while (current.parent != nullptr) {
-                current = *current.parent;
-                path.push_back({current.x, current.y});
+            // std::cout << "path rows : " << nodeParentData.rows() << ", path cols : " << nodeParentData.cols() <<"\n";
+            for(int i = nodeParentData.rows();i>0;i--)
+            {
+                path.push_back({nodeParentData(i-1,2), nodeParentData(i-1,3)});
+                // std::cout << "path x : " << nodeParentData(i-1,0) << ", y : " << nodeParentData(i-1,1) <<"\n";
             }
+
+
             std::reverse(path.begin(), path.end());
             return path;
         }
 
+
+        int newX = 0;
+        int newY = 0;
+
         for (int i = 0; i < 8; i++) {
-            int newX = current.x + dx[i];
-            int newY = current.y + dy[i];
+            newX = current.x + dx[i];
+            newY = current.y + dy[i];
 
             if (isValid(newX, newY, rows, cols, grid) && !closedList[newX][newY]) {
                 int new_g_cost = current.g_cost + 1;
@@ -70,7 +96,11 @@ std::vector<std::pair<int, int>> AStar(int startX, int startY, int goalX, int go
                 closedList[newX][newY] = true;
             }
         }
+        Node topNode = openList.top();
+        // std::cout << "Top node: (" << topNode.x << ", " << topNode.y << ") with f_cost: " << topNode.f_cost() << std::endl;
+        
     }
+
     return {};
 }
 
@@ -82,11 +112,14 @@ public:
 
         goal_sub_ = this->create_subscription<std_msgs::msg::Int32MultiArray>(
             "/astar_goal", 10, std::bind(&AStarNode::goalCallback, this, std::placeholders::_1));
+
+        path_length_pub_ = this->create_publisher<std_msgs::msg::Int32>("/path_length", 10);
     }
 
 private:
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32MultiArray>::SharedPtr goal_sub_;
+    rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr path_length_pub_;
     Eigen::MatrixXi grid_;
     int rows_ = 0, cols_ = 0;
 
@@ -110,15 +143,19 @@ private:
     }
 
     void goalCallback(const std_msgs::msg::Int32MultiArray::SharedPtr msg) {
-        if (msg->data.size() != 4) {
+        if (msg->data.size() != 12) {
             RCLCPP_ERROR(this->get_logger(), "Goal message must contain 4 elements: startX, startY, goalX, goalY");
             return;
         }
 
         int startX = msg->data[0];
         int startY = msg->data[1];
-        int goalX = msg->data[2];
-        int goalY = msg->data[3];
+        int goalX1 = msg->data[2];
+        int goalY1 = msg->data[3];
+        // int goalX2 = msg->data[2];
+        // int goalY2 = msg->data[3];
+        // int goalX3 = msg->data[2];
+        // int goalY3 = msg->data[3];
 
         if (grid_.size() == 0) {
             RCLCPP_ERROR(this->get_logger(), "Map data not received yet");
@@ -127,12 +164,10 @@ private:
 
         std::vector<std::pair<int, int>> path = AStar(startX, startY, goalX, goalY, grid_, rows_, cols_);
         if (!path.empty()) {
-            RCLCPP_INFO(this->get_logger(), "Path found:");
-            std::string path_str = "Path: ";
-            for (const auto& p : path) {
-                path_str += "[" + std::to_string(p.first) + ", " + std::to_string(p.second) + "] ";
-            }
-            RCLCPP_INFO(this->get_logger(), path_str.c_str());
+            auto path_length_msg = std_msgs::msg::Int32();
+            path_length_msg.data = path.size();
+            path_length_pub_->publish(path_length_msg);
+            RCLCPP_INFO(this->get_logger(), "Path length: %zu", path.size());
         } else {
             RCLCPP_WARN(this->get_logger(), "No path found");
         }
