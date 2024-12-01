@@ -38,69 +38,115 @@ bool isValid(int x, int y, int rows, int cols, const Eigen::MatrixXi& grid) {
     return x >= 0 && y >= 0 && x < rows && y < cols && grid(x, y) == 0;
 }
 
+// std::vector<std::pair<int, int>> AStar(int startX, int startY, int goalX, int goalY, const Eigen::MatrixXi& grid, int rows, int cols) {
+//     std::priority_queue<Node, std::vector<Node>, std::greater<Node>> openList;
+//     std::unordered_map<int, std::unordered_map<int, bool>> closedList;
+
+//     Node* startNode = new Node(startX, startY, 0, heuristic(startX, startY, goalX, goalY));
+//     openList.push(*startNode);
+
+//     Eigen::MatrixXi nodeParentData(0, 4);
+//     // int i=0;
+
+
+//     while (!openList.empty()) {
+//         RCLCPP_INFO(rclcpp::get_logger("AStar"), "OpenList size: %zu", openList.size());
+//         Node current = openList.top();
+//         openList.pop();
+        
+
+//         // 행렬에 새로운 데이터 삽입 (node와 parent 정보)
+//         if (current.parent != nullptr) {
+//             // i++;
+//             nodeParentData.conservativeResize(nodeParentData.rows() + 1, Eigen::NoChange);
+//             nodeParentData(nodeParentData.rows() - 1, 0) = current.x;      // node.x
+//             nodeParentData(nodeParentData.rows() - 1, 1) = current.y;      // node.y
+//             nodeParentData(nodeParentData.rows() - 1, 2) = current.parent->x;  // parent.x
+//             nodeParentData(nodeParentData.rows() - 1, 3) = current.parent->y;  // parent.y
+//             // std::cout << nodeParentData(i,1) <<"\n";
+//         }
+
+
+//         if (current.x == goalX && current.y == goalY) {
+//             std::vector<std::pair<int, int>> path;
+//             path.push_back({goalX, goalY});
+//             // std::cout << "path rows : " << nodeParentData.rows() << ", path cols : " << nodeParentData.cols() <<"\n";
+//             for(int i = nodeParentData.rows();i>0;i--)
+//             {
+//                 path.push_back({nodeParentData(i-1,2), nodeParentData(i-1,3)});
+//                 // std::cout << "path x : " << nodeParentData(i-1,0) << ", y : " << nodeParentData(i-1,1) <<"\n";
+//             }
+
+
+//             std::reverse(path.begin(), path.end());
+//             return path;
+//         }
+
+
+//         int newX = 0;
+//         int newY = 0;
+
+//         for (int i = 0; i < 8; i++) {
+//             newX = current.x + dx[i];
+//             newY = current.y + dy[i];
+
+//             if (isValid(newX, newY, rows, cols, grid) && !closedList[newX][newY]) {
+//                 int new_g_cost = current.g_cost + 1;
+//                 int new_h_cost = heuristic(newX, newY, goalX, goalY);
+//                 openList.push(Node(newX, newY, new_g_cost, new_h_cost, new Node(current.x, current.y, current.g_cost, current.h_cost)));
+//                 closedList[newX][newY] = true;
+//             }
+//         }
+//         Node topNode = openList.top();
+//         // std::cout << "Top node: (" << topNode.x << ", " << topNode.y << ") with f_cost: " << topNode.f_cost() << std::endl;
+        
+//     }
+
+//     return {};
+// }
+
 std::vector<std::pair<int, int>> AStar(int startX, int startY, int goalX, int goalY, const Eigen::MatrixXi& grid, int rows, int cols) {
     std::priority_queue<Node, std::vector<Node>, std::greater<Node>> openList;
-    std::unordered_map<int, std::unordered_map<int, bool>> closedList;
+    std::vector<std::vector<bool>> closedList(rows, std::vector<bool>(cols, false));
+
+    if (!isValid(goalX, goalY, rows, cols, grid)) {
+        RCLCPP_ERROR(rclcpp::get_logger("AStar"), "Invalid goal position: (%d, %d)", goalX, goalY);
+        return {};
+    }
 
     Node* startNode = new Node(startX, startY, 0, heuristic(startX, startY, goalX, goalY));
     openList.push(*startNode);
 
-    Eigen::MatrixXi nodeParentData(0, 4);
-    // int i=0;
-
-
     while (!openList.empty()) {
         Node current = openList.top();
         openList.pop();
-        
 
-        // 행렬에 새로운 데이터 삽입 (node와 parent 정보)
-        if (current.parent != nullptr) {
-            // i++;
-            nodeParentData.conservativeResize(nodeParentData.rows() + 1, Eigen::NoChange);
-            nodeParentData(nodeParentData.rows() - 1, 0) = current.x;      // node.x
-            nodeParentData(nodeParentData.rows() - 1, 1) = current.y;      // node.y
-            nodeParentData(nodeParentData.rows() - 1, 2) = current.parent->x;  // parent.x
-            nodeParentData(nodeParentData.rows() - 1, 3) = current.parent->y;  // parent.y
-            // std::cout << nodeParentData(i,1) <<"\n";
-        }
-
+        RCLCPP_INFO(rclcpp::get_logger("AStar"), "Exploring node: (%d, %d)", current.x, current.y);
 
         if (current.x == goalX && current.y == goalY) {
+            RCLCPP_INFO(rclcpp::get_logger("AStar"), "Goal reached at (%d, %d)", goalX, goalY);
             std::vector<std::pair<int, int>> path;
-            path.push_back({goalX, goalY});
-            // std::cout << "path rows : " << nodeParentData.rows() << ", path cols : " << nodeParentData.cols() <<"\n";
-            for(int i = nodeParentData.rows();i>0;i--)
-            {
-                path.push_back({nodeParentData(i-1,2), nodeParentData(i-1,3)});
-                // std::cout << "path x : " << nodeParentData(i-1,0) << ", y : " << nodeParentData(i-1,1) <<"\n";
+            Node* node = &current;
+            while (node) {
+                path.push_back({node->x, node->y});
+                node = node->parent;
             }
-
-
             std::reverse(path.begin(), path.end());
             return path;
         }
 
-
-        int newX = 0;
-        int newY = 0;
-
         for (int i = 0; i < 8; i++) {
-            newX = current.x + dx[i];
-            newY = current.y + dy[i];
+            int newX = current.x + dx[i];
+            int newY = current.y + dy[i];
 
             if (isValid(newX, newY, rows, cols, grid) && !closedList[newX][newY]) {
-                int new_g_cost = current.g_cost + 1;
-                int new_h_cost = heuristic(newX, newY, goalX, goalY);
-                openList.push(Node(newX, newY, new_g_cost, new_h_cost, new Node(current.x, current.y, current.g_cost, current.h_cost)));
                 closedList[newX][newY] = true;
+                openList.push(Node(newX, newY, current.g_cost + 1, heuristic(newX, newY, goalX, goalY), &current));
             }
         }
-        Node topNode = openList.top();
-        // std::cout << "Top node: (" << topNode.x << ", " << topNode.y << ") with f_cost: " << topNode.f_cost() << std::endl;
-        
     }
 
+    RCLCPP_WARN(rclcpp::get_logger("AStar"), "No path found.");
     return {};
 }
 
@@ -139,44 +185,79 @@ private:
                 }
             }
         }
-        RCLCPP_INFO(this->get_logger(), "Map received with size: %d x %d", rows_, cols_);
     }
 
     void goalCallback(const std_msgs::msg::Int32MultiArray::SharedPtr msg) {
-        if (msg->data.size() != 12) {
-            RCLCPP_ERROR(this->get_logger(), "Goal message must contain 4 elements: startX, startY, goalX, goalY");
+
+        RCLCPP_INFO(this->get_logger(), "GoalCallback called with data size: %zu", msg->data.size());
+
+        if (msg->data.empty()) {
+            RCLCPP_ERROR(this->get_logger(), "Goal message is empty");
             return;
         }
 
-        int startX = msg->data[0];
-        int startY = msg->data[1];
-        int goalX1 = msg->data[2];
-        int goalY1 = msg->data[3];
-        // int goalX2 = msg->data[2];
-        // int goalY2 = msg->data[3];
-        // int goalX3 = msg->data[2];
-        // int goalY3 = msg->data[3];
+        // 첫 번째 값: 목표 좌표의 개수
+        int goal_count = msg->data[0];
+
+        // 데이터 크기 검증 (goal_count * 2 + 2: 시작 좌표 2개 + 목표 좌표 2개씩)
+        if (msg->data.size() != static_cast<size_t>(goal_count * 2 + 3)) {
+            RCLCPP_ERROR(this->get_logger(), "Goal message size mismatch. Expected %d goal coordinates.", goal_count);
+            return;
+        }
+
+        // 시작 좌표
+        int startX = msg->data[1];
+        int startY = msg->data[2];
+
+        // 목표 지점 좌표 추출
+        std::vector<std::pair<int, int>> goals;
+        for (int i = 0; i < goal_count; ++i) {
+            int goalX = msg->data[3 + i * 2];
+            int goalY = msg->data[4 + i * 2];
+            goals.emplace_back(goalX, goalY);
+        }
 
         if (grid_.size() == 0) {
             RCLCPP_ERROR(this->get_logger(), "Map data not received yet");
             return;
         }
 
-        std::vector<std::pair<int, int>> path = AStar(startX, startY, goalX, goalY, grid_, rows_, cols_);
-        if (!path.empty()) {
+        // 각 목표에 대해 경로 계산 및 최단 경로 선택
+        int shortest_index = -1;
+        size_t shortest_length = std::numeric_limits<size_t>::max();
+
+        for (size_t i = 0; i < goals.size(); ++i) {
+            int goalX = goals[i].first;
+            int goalY = goals[i].second;
+
+            std::vector<std::pair<int, int>> path = AStar(startX, startY, goalX, goalY, grid_, rows_, cols_);
+            if (!path.empty()) {
+                RCLCPP_INFO(this->get_logger(), "Path %zu length: %zu", i + 1, path.size());
+                if (path.size() < shortest_length) {
+                    shortest_length = path.size();
+                    shortest_index = i;
+                }
+            } else {
+                RCLCPP_WARN(this->get_logger(), "No path found for goal %zu (%d, %d)", i + 1, goalX, goalY);
+            }
+        }
+
+        // 최단 경로 인덱스 발행
+        if (shortest_index != -1) {
             auto path_length_msg = std_msgs::msg::Int32();
-            path_length_msg.data = path.size();
+            path_length_msg.data = static_cast<int>(shortest_index);
             path_length_pub_->publish(path_length_msg);
-            RCLCPP_INFO(this->get_logger(), "Path length: %zu", path.size());
+            RCLCPP_INFO(this->get_logger(), "Shortest path is to goal %d with length %zu", shortest_index + 1, shortest_length);
         } else {
-            RCLCPP_WARN(this->get_logger(), "No path found");
+            RCLCPP_WARN(this->get_logger(), "No valid paths found for any goals");
         }
     }
 };
 
 int main(int argc, char** argv) {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<AStarNode>());
-    rclcpp::shutdown();
+    auto node = std::make_shared<AStarNode>();
+    rclcpp::spin(node);  // 여기서 SIGINT(CTRL+C)를 감지합니다.
+    rclcpp::shutdown();  // ROS2 시스템을 안전하게 종료합니다.
     return 0;
 }
